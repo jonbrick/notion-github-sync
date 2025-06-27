@@ -55,25 +55,8 @@ function validateDate(dateString) {
   return { valid: true, date };
 }
 
-// Function to get week boundaries for a specific date
-function getWeekBoundariesForDate(date) {
-  const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
-
-  // Calculate Sunday (start of week)
-  const weekStart = new Date(date);
-  weekStart.setDate(date.getDate() - dayOfWeek);
-  weekStart.setHours(0, 0, 0, 0);
-
-  // Calculate Saturday (end of week)
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-  weekEnd.setHours(23, 59, 59, 999);
-
-  return { weekStart, weekEnd };
-}
-
 async function main() {
-  console.log("🗓️ Calendar Event Creator 2025\n");
+  console.log("📅 GitHub Calendar Event Creator 2025\n");
 
   // Test connections
   console.log("Testing connections...");
@@ -87,7 +70,7 @@ async function main() {
 
   console.log("✅ Notion connection successful!");
   console.log("✅ Calendar connection successful!");
-  console.log("📊 Database: Workout Data\n");
+  console.log("📊 Database: GitHub Data\n");
 
   console.log("📅 Choose your selection method:");
   console.log("  1. Enter a specific Date (DD-MM-YY format)");
@@ -196,38 +179,43 @@ async function main() {
     );
   }
 
-  // Get workouts from Notion
-  const workouts = await notion.getWorkoutsForWeek(weekStart, weekEnd);
+  // Get GitHub activities from Notion (instead of workouts)
+  const githubActivities = await notion.getWorkoutsForWeek(weekStart, weekEnd);
 
-  if (workouts.length === 0) {
-    console.log("📭 No workouts found without calendar events for this period");
+  if (githubActivities.length === 0) {
     console.log(
-      "💡 Try running collect-workouts.js first to gather workout data"
+      "📭 No GitHub activities found without calendar events for this period"
     );
+    console.log("💡 Try running collect-github.js first to gather GitHub data");
     rl.close();
     return;
   }
 
   if (optionInput === "1") {
     console.log(
-      `🔄 Fetching workout sessions from ${
+      `🔄 Fetching GitHub activities from ${
         selectedDate.toISOString().split("T")[0]
       } to ${selectedDate.toISOString().split("T")[0]}`
     );
   }
 
-  console.log(`🗓️ Found ${workouts.length} workout sessions\n`);
+  console.log(`🗓️ Found ${githubActivities.length} GitHub activities\n`);
 
-  console.log("🗓️ Processing workout sessions:");
-  workouts.forEach((workout, index) => {
+  console.log("🗓️ Processing GitHub activities:");
+  githubActivities.forEach((activity, index) => {
+    const projectType = activity.projectType || "Personal"; // Default to Personal if not set
     if (optionInput === "1") {
       console.log(
         `  ${index + 1}. ${
-          workout.activityName
-        } - Date ${selectedDate.toDateString()}`
+          activity.repository
+        } (${projectType}) - Date ${selectedDate.toDateString()}`
       );
     } else {
-      console.log(`  ${index + 1}. ${workout.activityName} - ${workout.date}`);
+      console.log(
+        `  ${index + 1}. ${activity.repository} (${projectType}) - ${
+          activity.date
+        }`
+      );
     }
   });
 
@@ -245,46 +233,78 @@ async function main() {
 
   console.log("\n🗓️ Creating calendar events:");
   let createdCount = 0;
+  let workCount = 0;
+  let personalCount = 0;
 
-  for (const workout of workouts) {
+  for (const activity of githubActivities) {
     try {
-      await calendar.createWorkoutEvent(workout);
-      await notion.markCalendarCreated(workout.id);
+      console.log(
+        `🔍 Debug: ${activity.repository} - projectType: "${activity.projectType}"`
+      );
+
+      // Transform activity to match expected format for calendar
+      const calendarActivity = {
+        repository: activity.repository,
+        date: activity.date,
+        commitsCount: activity.commitsCount,
+        commitMessages: activity.commitMessages,
+        prTitles: activity.prTitles || "",
+        totalLinesAdded: activity.totalLinesAdded,
+        totalLinesDeleted: activity.totalLinesDeleted,
+        totalChanges: activity.totalLinesAdded + activity.totalLinesDeleted,
+        projectType: activity.projectType || "Personal",
+      };
+
+      await calendar.createGitHubEvent(calendarActivity);
+      await notion.markCalendarCreated(activity.id);
       createdCount++;
+
+      // Count by type
+      if (calendarActivity.projectType === "Work") {
+        workCount++;
+      } else {
+        personalCount++;
+      }
 
       if (optionInput === "1") {
         console.log(
           `✅ Processing Date ${selectedDate.toDateString()} from Notion Date ${
-            workout.date
+            activity.date
           }`
         );
         console.log(
           `✅ Created calendar event for Date: ${selectedDate.toDateString()} (Notion Date: ${
-            workout.date
+            activity.date
           })`
         );
         console.log(
           `✅ Created ${selectedDate.toDateString()}: ${
-            workout.activityName
-          } | ${workout.type} | ${
-            workout.distance
-              ? (workout.distance / 1000).toFixed(2) + "km"
-              : "N/A"
-          }`
+            activity.repository
+          } | ${activity.commitsCount} commits | ${
+            calendarActivity.totalChanges
+          } changes`
         );
       } else {
-        console.log(`✅ Created: ${workout.activityName}`);
+        console.log(
+          `✅ Created: ${activity.repository} (${calendarActivity.projectType})`
+        );
       }
     } catch (error) {
       console.error(
-        `❌ Failed to create calendar event for ${workout.activityName}:`,
+        `❌ Failed to create calendar event for ${activity.repository}:`,
         error.message
       );
     }
   }
 
   console.log(`\n✅ Successfully created ${createdCount} calendar events!`);
-  console.log("🎯 Check your fitness calendar to see the workouts!");
+  if (workCount > 0) {
+    console.log(`🏢 Work calendar: ${workCount} events`);
+  }
+  if (personalCount > 0) {
+    console.log(`🏠 Personal calendar: ${personalCount} events`);
+  }
+  console.log("🎯 Check your calendars to see the GitHub activities!");
 }
 
 main().catch(console.error);
