@@ -4,6 +4,7 @@ const {
   testConnections,
   getDateSelection,
   calculateSearchRange,
+  calculateWeekSearchRange,
   closeReadline,
   askQuestion,
 } = require("./lib/cli-utils.js");
@@ -99,8 +100,31 @@ async function main() {
       `🔍 Filtered to ${activities.length} activities for EST date ${requestedEstDateStr}`
     );
   } else {
-    // Use local boundaries for week selection
-    activities = await github.getActivities(weekStart, weekEnd);
+    // Use UTC boundaries for week selection
+    const weekSearchRange = calculateWeekSearchRange(weekStart, weekEnd);
+    activities = await github.getActivities(
+      weekSearchRange.startUTC,
+      weekSearchRange.endUTC
+    );
+    console.log(
+      `🔍 Using UTC week range: ${weekSearchRange.startUTC.toISOString()} to ${weekSearchRange.endUTC.toISOString()}`
+    );
+
+    // Filter activities to only include those within the selected week boundaries
+    const weekStartStr = weekStart.toISOString().split("T")[0];
+    const weekEndStr = weekEnd.toISOString().split("T")[0];
+
+    const originalCount = activities.length;
+    activities = activities.filter((activity) => {
+      const activityDate = activity.date; // This is already in EST format YYYY-MM-DD
+      return activityDate >= weekStartStr && activityDate <= weekEndStr;
+    });
+
+    if (originalCount !== activities.length) {
+      console.log(
+        `🔍 Filtered from ${originalCount} to ${activities.length} activities within week ${weekStartStr} to ${weekEndStr}`
+      );
+    }
   }
 
   if (activities.length === 0) {
