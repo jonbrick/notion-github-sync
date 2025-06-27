@@ -72,7 +72,19 @@ async function main() {
   console.log("✅ Calendar connection successful!");
   console.log("📊 Database: GitHub Data\n");
 
-  console.log("📅 Choose your selection method:");
+  console.log("📅 Which calendar(s) to update?");
+  console.log("  1. Both calendars");
+  console.log("  2. Work calendar only");
+  console.log("  3. Personal calendar only");
+
+  const calendarInput = await askQuestion("? Choose option (1, 2, or 3): ");
+
+  if (calendarInput < 1 || calendarInput > 3) {
+    console.log("❌ Invalid option. Please choose 1, 2, or 3.");
+    process.exit(1);
+  }
+
+  console.log("\n📅 Choose your selection method:");
   console.log("  1. Enter a specific Date (DD-MM-YY format)");
   console.log("  2. Select by week number");
 
@@ -199,10 +211,22 @@ async function main() {
     );
   }
 
-  console.log(`🗓️ Found ${githubActivities.length} GitHub activities\n`);
+  // Filter activities based on calendar choice
+  let filteredActivities = githubActivities;
+  if (calendarInput === "2") {
+    filteredActivities = githubActivities.filter(
+      (activity) => activity.projectType === "Work"
+    );
+  } else if (calendarInput === "3") {
+    filteredActivities = githubActivities.filter(
+      (activity) => activity.projectType === "Personal"
+    );
+  }
+
+  console.log(`🗓️ Found ${filteredActivities.length} GitHub activities\n`);
 
   console.log("🗓️ Processing GitHub activities:");
-  githubActivities.forEach((activity, index) => {
+  filteredActivities.forEach((activity, index) => {
     const projectType = activity.projectType || "Personal"; // Default to Personal if not set
     if (optionInput === "1") {
       console.log(
@@ -236,7 +260,7 @@ async function main() {
   let workCount = 0;
   let personalCount = 0;
 
-  for (const activity of githubActivities) {
+  for (const activity of filteredActivities) {
     try {
       // Transform activity to match expected format for calendar
       const calendarActivity = {
