@@ -238,10 +238,6 @@ async function main() {
 
   for (const activity of githubActivities) {
     try {
-      console.log(
-        `🔍 Debug: ${activity.repository} - projectType: "${activity.projectType}"`
-      );
-
       // Transform activity to match expected format for calendar
       const calendarActivity = {
         repository: activity.repository,
