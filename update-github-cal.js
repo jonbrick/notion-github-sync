@@ -1,76 +1,23 @@
 const NotionClient = require("./lib/notion-client.js");
 const CalendarClient = require("./lib/calendar-client.js");
 const {
-  getWeekBoundaries,
-  generateWeekOptions,
-} = require("./lib/week-utils.js");
-const readline = require("readline");
+  testConnections,
+  getDateSelection,
+  calculateSearchRange,
+  calculateWeekSearchRange,
+  closeReadline,
+  askQuestion,
+} = require("./lib/cli-utils.js");
 
 // Create clients
 const notion = new NotionClient();
 const calendar = new CalendarClient();
 
-// Create readline interface
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
-
-function askQuestion(question) {
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      resolve(answer);
-    });
-  });
-}
-
-// Function to validate DD-MM-YY date format
-function validateDate(dateString) {
-  const dateRegex = /^(\d{1,2})-(\d{1,2})-(\d{2})$/;
-  const match = dateString.match(dateRegex);
-
-  if (!match) {
-    return {
-      valid: false,
-      error: "Invalid format. Please use DD-MM-YY (e.g., 15-03-25)",
-    };
-  }
-
-  const [, day, month, year] = match;
-  const fullYear = 2000 + parseInt(year);
-  const date = new Date(fullYear, parseInt(month) - 1, parseInt(day));
-
-  // Check if the date is valid
-  if (
-    date.getFullYear() !== fullYear ||
-    date.getMonth() !== parseInt(month) - 1 ||
-    date.getDate() !== parseInt(day)
-  ) {
-    return {
-      valid: false,
-      error: "Invalid date. Please check day, month, and year.",
-    };
-  }
-
-  return { valid: true, date };
-}
-
 async function main() {
   console.log("📅 GitHub Calendar Event Creator 2025\n");
 
   // Test connections
-  console.log("Testing connections...");
-  const notionOk = await notion.testConnection();
-  const calendarOk = await calendar.testConnection();
-
-  if (!notionOk || !calendarOk) {
-    console.log("❌ Connection failed. Please check your .env file.");
-    process.exit(1);
-  }
-
-  console.log("✅ Notion connection successful!");
-  console.log("✅ Calendar connection successful!");
-  console.log("📊 Database: GitHub Data\n");
+  await testConnections({ notion, calendar });
 
   console.log("📅 Which calendar(s) to update?");
   console.log("  1. Both calendars");
@@ -84,89 +31,43 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("\n📅 Choose your selection method:");
-  console.log("  1. Enter a specific Date (DD-MM-YY format)");
-  console.log("  2. Select by week number");
-
-  const optionInput = await askQuestion("? Choose option (1 or 2): ");
-
-  let weekStart, weekEnd, dateRangeLabel, selectedDate;
-
-  if (optionInput === "1") {
-    // Specific date input
-    let validDate = false;
-
-    while (!validDate) {
-      const dateInput = await askQuestion(
-        "? Enter Date in DD-MM-YY format (e.g., 15-03-25): "
-      );
-
-      const validation = validateDate(dateInput);
-      if (validation.valid) {
-        selectedDate = validation.date;
-        validDate = true;
-      } else {
-        console.log(`❌ ${validation.error}`);
-      }
-    }
-
-    // Set start and end to the same day
-    weekStart = new Date(selectedDate);
-    weekStart.setHours(0, 0, 0, 0);
-
-    weekEnd = new Date(selectedDate);
-    weekEnd.setHours(23, 59, 59, 999);
-
-    dateRangeLabel = `Date: ${selectedDate.toDateString()}`;
-  } else if (optionInput === "2") {
-    // Week selection (current behavior)
-    console.log("\n📅 Available weeks:");
-    const weeks = generateWeekOptions(2025);
-
-    // Show first few weeks as examples
-    weeks.slice(0, 5).forEach((week, index) => {
-      console.log(`  ${week.value} - ${week.label}`);
-    });
-    console.log("  ...");
-    console.log(`  52 - ${weeks[51].label}\n`);
-
-    const weekInput = await askQuestion(
-      "? Which week to create calendar events? (enter week number): "
-    );
-    const weekNumber = parseInt(weekInput);
-
-    if (weekNumber < 1 || weekNumber > 52) {
-      console.log("❌ Invalid week number");
-      process.exit(1);
-    }
-
-    const weekData = getWeekBoundaries(2025, weekNumber);
-    weekStart = weekData.weekStart;
-    weekEnd = weekData.weekEnd;
-    dateRangeLabel = `Week ${weekNumber}`;
-  } else {
-    console.log("❌ Invalid option. Please choose 1 or 2.");
-    process.exit(1);
-  }
+  // Get date selection using DRY code
+  const { weekStart, weekEnd, dateRangeLabel, selectedDate, optionInput } =
+    await getDateSelection();
 
   if (optionInput === "1") {
     console.log(
-      `\n📊 Creating calendar events for Date ${selectedDate.toDateString()}`
+      `\n📊 Creating calendar events for Date ${selectedDate.toDateString()} (Eastern)`
     );
-    console.log(`📅 Date: ${selectedDate.toDateString()}`);
+    console.log(`📅 Eastern Date: ${selectedDate.toDateString()}`);
     console.log(
-      `📱 Calendar Date: ${selectedDate.toDateString()} (${
+      `📱 Calendar Date (UTC): ${selectedDate.toDateString()} (${
         selectedDate.toISOString().split("T")[0]
       })\n`
     );
 
     console.log("📋 Summary:");
     console.log("📊 Single day operation");
-    console.log(`📅 Date: ${selectedDate.toDateString()}`);
+    console.log(`📅 Eastern Date: ${selectedDate.toDateString()}`);
     console.log(
-      `📱 Calendar Date: ${selectedDate.toDateString()} (${
+      `📱 Calendar Date (UTC): ${selectedDate.toDateString()} (${
         selectedDate.toISOString().split("T")[0]
       })\n`
+    );
+
+    const searchRange = calculateSearchRange(selectedDate);
+    console.log("🔍 Search Details:");
+    console.log(`   EST date requested: ${selectedDate.toDateString()}`);
+    console.log(
+      `   EST day boundaries: ${searchRange.estStartOfDay.toLocaleString(
+        "en-US",
+        { timeZone: "America/New_York" }
+      )} to ${searchRange.estEndOfDay.toLocaleString("en-US", {
+        timeZone: "America/New_York",
+      })}`
+    );
+    console.log(
+      `   UTC search range: ${searchRange.startUTC.toISOString()} to ${searchRange.endUTC.toISOString()}\n`
     );
 
     const proceed = await askQuestion(
@@ -191,7 +92,7 @@ async function main() {
     );
   }
 
-  // Get GitHub activities from Notion (instead of workouts)
+  // Get GitHub activities from Notion
   const githubActivities = await notion.getWorkoutsForWeek(weekStart, weekEnd);
 
   if (githubActivities.length === 0) {
@@ -199,7 +100,6 @@ async function main() {
       "📭 No GitHub activities found without calendar events for this period"
     );
     console.log("💡 Try running collect-github.js first to gather GitHub data");
-    rl.close();
     return;
   }
 
@@ -217,9 +117,15 @@ async function main() {
     filteredActivities = githubActivities.filter(
       (activity) => activity.projectType === "Work"
     );
+    console.log(
+      `🔍 Filtered to work activities only: ${filteredActivities.length} activities`
+    );
   } else if (calendarInput === "3") {
     filteredActivities = githubActivities.filter(
       (activity) => activity.projectType === "Personal"
+    );
+    console.log(
+      `🔍 Filtered to personal activities only: ${filteredActivities.length} activities`
     );
   }
 
@@ -249,11 +155,10 @@ async function main() {
 
   if (finalConfirm.toLowerCase() !== "y") {
     console.log("❌ Operation cancelled");
-    rl.close();
     return;
   }
 
-  rl.close();
+  closeReadline();
 
   console.log("\n🗓️ Creating calendar events:");
   let createdCount = 0;
