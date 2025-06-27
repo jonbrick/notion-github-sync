@@ -1,4 +1,4 @@
-const StravaClient = require("./lib/strava-client.js");
+const GitHubClient = require("./lib/github-client.js");
 const NotionClient = require("./lib/notion-client.js");
 const {
   getWeekBoundaries,
@@ -7,7 +7,7 @@ const {
 const readline = require("readline");
 
 // Create clients
-const strava = new StravaClient();
+const github = new GitHubClient();
 const notion = new NotionClient();
 
 // Create readline interface
@@ -73,21 +73,21 @@ function getWeekBoundariesForDate(date) {
 }
 
 async function main() {
-  console.log("🏃‍♂️ Strava Workout Collector 2025\n");
+  console.log("🔨 GitHub Activity Collector 2025\n");
 
   // Test connections
   console.log("Testing connections...");
-  const stravaOk = await strava.testConnection();
+  const githubOk = await github.testConnection();
   const notionOk = await notion.testConnection();
 
-  if (!stravaOk || !notionOk) {
+  if (!githubOk || !notionOk) {
     console.log("❌ Connection failed. Please check your .env file.");
     process.exit(1);
   }
 
-  console.log("✅ Strava connection successful!");
+  console.log("✅ GitHub connection successful!");
   console.log("✅ Notion connection successful!");
-  console.log("📊 Database: Workout Data\n");
+  console.log("📊 Database: GitHub Data\n");
 
   console.log("📅 Choose your selection method:");
   console.log("  1. Enter a specific Date (DD-MM-YY format)");
@@ -156,11 +156,11 @@ async function main() {
 
   if (optionInput === "1") {
     console.log(
-      `\n📊 Collecting workout data for Date ${selectedDate.toDateString()}`
+      `\n📊 Collecting GitHub activity for Date ${selectedDate.toDateString()}`
     );
     console.log(`📅 Date: ${selectedDate.toDateString()}`);
     console.log(
-      `📱 Strava Date: ${selectedDate.toDateString()} (${
+      `📱 GitHub Date: ${selectedDate.toDateString()} (${
         selectedDate.toISOString().split("T")[0]
       })\n`
     );
@@ -169,13 +169,13 @@ async function main() {
     console.log("📊 Single day operation");
     console.log(`📅 Date: ${selectedDate.toDateString()}`);
     console.log(
-      `📱 Strava Date: ${selectedDate.toDateString()} (${
+      `📱 GitHub Date: ${selectedDate.toDateString()} (${
         selectedDate.toISOString().split("T")[0]
       })\n`
     );
 
     const proceed = await askQuestion(
-      "? Proceed with collecting workout data for this period? (y/n): "
+      "? Proceed with collecting GitHub activity for this period? (y/n): "
     );
     if (proceed.toLowerCase() !== "y") {
       console.log("❌ Operation cancelled");
@@ -183,14 +183,14 @@ async function main() {
     }
 
     console.log(
-      `🔄 Fetching Strava dates ${
+      `🔄 Fetching GitHub dates ${
         selectedDate.toISOString().split("T")[0]
       } to ${
         selectedDate.toISOString().split("T")[0]
       } for Date ${selectedDate.toDateString()} - ${selectedDate.toDateString()}`
     );
   } else {
-    console.log(`\n📊 Collecting workout data for ${dateRangeLabel}`);
+    console.log(`\n📊 Collecting GitHub activity for ${dateRangeLabel}`);
     console.log(
       `📅 Date range: ${weekStart.toDateString()} - ${weekEnd.toDateString()}\n`
     );
@@ -198,25 +198,25 @@ async function main() {
 
   rl.close();
 
-  // Fetch workouts from Strava
-  const activities = await strava.getActivities(weekStart, weekEnd);
+  // Fetch activities from GitHub
+  const activities = await github.getActivities(weekStart, weekEnd);
 
   if (activities.length === 0) {
-    console.log("📭 No activities found for this period");
+    console.log("📭 No GitHub activity found for this period");
     return;
   }
 
   if (optionInput === "1") {
     console.log(
-      `🔄 Fetching workout sessions from ${
+      `🔄 Fetching GitHub activity from ${
         selectedDate.toISOString().split("T")[0]
       } to ${selectedDate.toISOString().split("T")[0]}`
     );
   }
 
-  console.log(`🏃‍♂️ Found ${activities.length} workout sessions\n`);
+  console.log(`🔨 Found ${activities.length} repositories with activity\n`);
 
-  console.log("🏃‍♂️ Processing workout sessions:");
+  console.log("🔨 Processing GitHub activities:");
   let savedCount = 0;
 
   for (const activity of activities) {
@@ -226,44 +226,34 @@ async function main() {
 
       if (optionInput === "1") {
         console.log(
-          `✅ Processing Date ${selectedDate.toDateString()} from Strava Date ${
-            activity.start_date.split("T")[0]
+          `✅ Processing Date ${selectedDate.toDateString()} from GitHub Date ${
+            activity.date
           }`
         );
         console.log(
-          `✅ Created workout record for Date: ${selectedDate.toDateString()} (Strava Date: ${
-            activity.start_date.split("T")[0]
+          `✅ Created GitHub record for Date: ${selectedDate.toDateString()} (GitHub Date: ${
+            activity.date
           })`
         );
         console.log(
-          `✅ Saved ${selectedDate.toDateString()}: ${activity.name} | ${
-            activity.type
-          } | ${
-            activity.distance
-              ? (activity.distance / 1000).toFixed(2) + "km"
-              : "N/A"
-          }`
+          `✅ Saved ${selectedDate.toDateString()}: ${activity.repository} | ${
+            activity.commitsCount
+          } commits | ${activity.totalChanges} changes`
         );
       } else {
         console.log(
-          `✅ Saved ${activity.name}: ${activity.type} | ${
-            activity.distance
-              ? (activity.distance / 1000).toFixed(2) + "km"
-              : "N/A"
-          }`
+          `✅ Saved ${activity.repository}: ${activity.commitsCount} commits | ${activity.totalChanges} changes`
         );
       }
     } catch (error) {
-      console.error(`❌ Failed to save ${activity.name}:`, error.message);
+      console.error(`❌ Failed to save ${activity.repository}:`, error.message);
     }
   }
 
   console.log(
-    `\n✅ Successfully saved ${savedCount} workout sessions to Notion!`
+    `\n✅ Successfully saved ${savedCount} GitHub activities to Notion!`
   );
-  console.log(
-    "🎯 Next: Run update-workout-cal.js to add them to your calendar"
-  );
+  console.log("🎯 Next: Run update-github-cal.js to add them to your calendar");
 }
 
 main().catch(console.error);
