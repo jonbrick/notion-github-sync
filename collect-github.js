@@ -57,7 +57,8 @@ function validateDate(dateString) {
 
 // Function to get week boundaries for a specific date
 function getWeekBoundariesForDate(date) {
-  const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  // Get day of week (0 = Sunday, 1 = Monday, etc.)
+  const dayOfWeek = date.getDay();
 
   // Calculate Sunday (start of week)
   const weekStart = new Date(date);
@@ -72,6 +73,37 @@ function getWeekBoundariesForDate(date) {
   return { weekStart, weekEnd };
 }
 
+function calculateSearchRange(selectedDate) {
+  // Create EST day boundaries (local time)
+  const estStartOfDay = new Date(
+    selectedDate.getFullYear(),
+    selectedDate.getMonth(),
+    selectedDate.getDate(),
+    0,
+    0,
+    0
+  );
+  const estEndOfDay = new Date(
+    selectedDate.getFullYear(),
+    selectedDate.getMonth(),
+    selectedDate.getDate(),
+    23,
+    59,
+    59
+  );
+
+  // Convert EST to UTC (EST is UTC-5, so add 5 hours to get UTC)
+  const startUTC = new Date(estStartOfDay.getTime() + 5 * 60 * 60 * 1000);
+  const endUTC = new Date(estEndOfDay.getTime() + 5 * 60 * 60 * 1000);
+
+  return {
+    estStartOfDay,
+    estEndOfDay,
+    startUTC,
+    endUTC,
+  };
+}
+
 async function main() {
   console.log("🔨 GitHub Activity Collector 2025\n");
 
@@ -84,10 +116,6 @@ async function main() {
     console.log("❌ Connection failed. Please check your .env file.");
     process.exit(1);
   }
-
-  console.log("✅ GitHub connection successful!");
-  console.log("✅ Notion connection successful!");
-  console.log("📊 Database: GitHub Data\n");
 
   console.log("📅 Choose your selection method:");
   console.log("  1. Enter a specific Date (DD-MM-YY format)");
@@ -156,22 +184,37 @@ async function main() {
 
   if (optionInput === "1") {
     console.log(
-      `\n📊 Collecting GitHub activity for Date ${selectedDate.toDateString()}`
+      `\n📊 Collecting GitHub activity for Date ${selectedDate.toDateString()} (Eastern)`
     );
-    console.log(`📅 Date: ${selectedDate.toDateString()}`);
+    console.log(`📅 Eastern Date: ${selectedDate.toDateString()}`);
     console.log(
-      `📱 GitHub Date: ${selectedDate.toDateString()} (${
+      `📱 GitHub Date (UTC): ${selectedDate.toDateString()} (${
         selectedDate.toISOString().split("T")[0]
       })\n`
     );
 
     console.log("📋 Summary:");
     console.log("📊 Single day operation");
-    console.log(`📅 Date: ${selectedDate.toDateString()}`);
+    console.log(`📅 Eastern Date: ${selectedDate.toDateString()}`);
     console.log(
-      `📱 GitHub Date: ${selectedDate.toDateString()} (${
+      `📱 GitHub Date (UTC): ${selectedDate.toDateString()} (${
         selectedDate.toISOString().split("T")[0]
       })\n`
+    );
+
+    const searchRange = calculateSearchRange(selectedDate);
+    console.log("🔍 Search Details:");
+    console.log(`   EST date requested: ${selectedDate.toDateString()}`);
+    console.log(
+      `   EST day boundaries: ${searchRange.estStartOfDay.toLocaleString(
+        "en-US",
+        { timeZone: "America/New_York" }
+      )} to ${searchRange.estEndOfDay.toLocaleString("en-US", {
+        timeZone: "America/New_York",
+      })}`
+    );
+    console.log(
+      `   UTC search range: ${searchRange.startUTC.toISOString()} to ${searchRange.endUTC.toISOString()}\n`
     );
 
     const proceed = await askQuestion(
@@ -199,7 +242,18 @@ async function main() {
   rl.close();
 
   // Fetch activities from GitHub
-  const activities = await github.getActivities(weekStart, weekEnd);
+  let activities;
+  if (optionInput === "1") {
+    // Use UTC boundaries for single date
+    const searchRange = calculateSearchRange(selectedDate);
+    activities = await github.getActivities(
+      searchRange.startUTC,
+      searchRange.endUTC
+    );
+  } else {
+    // Use local boundaries for week selection
+    activities = await github.getActivities(weekStart, weekEnd);
+  }
 
   if (activities.length === 0) {
     console.log("📭 No GitHub activity found for this period");
@@ -221,24 +275,29 @@ async function main() {
 
   for (const activity of activities) {
     try {
+      console.log(
+        `🔄 Processing activity: ${activity.repository} - ${activity.date} - ${activity.commitsCount} commits`
+      );
       await notion.createWorkoutRecord(activity);
       savedCount++;
 
       if (optionInput === "1") {
         console.log(
-          `✅ Processing Date ${selectedDate.toDateString()} from GitHub Date ${
+          `✅ Processing Eastern Date ${selectedDate.toDateString()} from GitHub Date ${
             activity.date
           }`
         );
         console.log(
-          `✅ Created GitHub record for Date: ${selectedDate.toDateString()} (GitHub Date: ${
+          `✅ Created GitHub record for Eastern Date: ${selectedDate.toDateString()} (GitHub Date: ${
             activity.date
           })`
         );
         console.log(
-          `✅ Saved ${selectedDate.toDateString()}: ${activity.repository} | ${
-            activity.commitsCount
-          } commits | ${activity.totalChanges} changes`
+          `✅ Saved Eastern ${selectedDate.toDateString()}: ${
+            activity.repository
+          } | ${activity.commitsCount} commits | ${
+            activity.totalChanges
+          } changes`
         );
       } else {
         console.log(
