@@ -10,7 +10,9 @@ const {
 } = require("./lib/cli-utils.js");
 
 // Create clients
-const github = new GitHubClient();
+const github = new GitHubClient({
+  workRepos: ["cortexapps/brain-app"], // Add more repos here as needed: ["cortexapps/brain-app", "cortexapps/other-repo"]
+});
 const notion = new NotionClient();
 
 async function main() {
@@ -78,6 +80,25 @@ async function main() {
     console.log(
       `📅 Date range: ${weekStart.toDateString()} - ${weekEnd.toDateString()}\n`
     );
+
+    // Add confirmation step for week selection
+    const weekSearchRange = calculateWeekSearchRange(weekStart, weekEnd);
+    console.log("🔍 Search Details:");
+    console.log(`   Week requested: ${dateRangeLabel}`);
+    console.log(
+      `   EST week boundaries: ${weekStart.toDateString()} to ${weekEnd.toDateString()}`
+    );
+    console.log(
+      `   UTC search range: ${weekSearchRange.startUTC.toISOString()} to ${weekSearchRange.endUTC.toISOString()}\n`
+    );
+
+    const proceed = await askQuestion(
+      "? Proceed with collecting GitHub activity for this period? (y/n): "
+    );
+    if (proceed.toLowerCase() !== "y") {
+      console.log("❌ Operation cancelled");
+      process.exit(0);
+    }
   }
 
   closeReadline();
@@ -128,7 +149,18 @@ async function main() {
   }
 
   if (activities.length === 0) {
-    console.log("📭 No GitHub activity found for this period");
+    // Create date range string for the no data message
+    let noDataDateRangeStr;
+    if (optionInput === "1") {
+      noDataDateRangeStr = selectedDate.toDateString();
+    } else {
+      // Extract week number from the dateRangeLabel
+      const weekMatch = dateRangeLabel.match(/Week (\d+)/);
+      const weekNumber = weekMatch ? weekMatch[1] : "";
+      noDataDateRangeStr = `Week ${weekNumber} (${weekStart.toDateString()} - ${weekEnd.toDateString()})`;
+    }
+
+    console.log(`📭 No GitHub activity found for ${noDataDateRangeStr}`);
     return;
   }
 
@@ -181,10 +213,20 @@ async function main() {
     }
   }
 
+  // Create date range string for the success message
+  let dateRangeStr;
+  if (optionInput === "1") {
+    dateRangeStr = selectedDate.toDateString();
+  } else {
+    // Extract week number from the dateRangeLabel
+    const weekMatch = dateRangeLabel.match(/Week (\d+)/);
+    const weekNumber = weekMatch ? weekMatch[1] : "";
+    dateRangeStr = `Week ${weekNumber} (${weekStart.toDateString()} - ${weekEnd.toDateString()})`;
+  }
+
   console.log(
-    `\n✅ Successfully saved ${savedCount} GitHub activities to Notion!`
+    `\n✅ Successfully saved ${savedCount} GitHub activities to Notion for ${dateRangeStr}!`
   );
-  console.log("🎯 Next: Run update-github-cal.js to add them to your calendar");
 }
 
 main().catch(console.error);
