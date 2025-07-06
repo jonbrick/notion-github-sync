@@ -280,9 +280,6 @@ node -e "const GitHubClient = require('./lib/github-client.js'); const client = 
 # Test Notion connection
 node -e "const NotionClient = require('./lib/notion-client.js'); const client = new NotionClient(); client.testConnection();"
 
-# Test Google Calendar connection
-node -e "const CalendarClient = require('./lib/calendar-client.js'); const client = new CalendarClient(); client.testConnection();"
-
 # Test week calculations
 node -e "const { getWeekBoundaries } = require('./lib/week-utils.js'); console.log('Week 25:', getWeekBoundaries(2025, 25));"
 ```

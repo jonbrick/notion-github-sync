@@ -1,5 +1,5 @@
 const GitHubClient = require("./lib/github-client.js");
-const NotionClient = require("./lib/notion-client.js");
+const NotionClient = require("./lib/github-notion-client.js");
 const {
   testConnections,
   getDateSelection,
@@ -7,7 +7,7 @@ const {
   calculateWeekSearchRange,
   closeReadline,
   askQuestion,
-} = require("./lib/cli-utils.js");
+} = require("./lib/github-cli-utils.js");
 
 // Create clients
 const github = new GitHubClient({
